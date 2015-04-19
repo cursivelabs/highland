@@ -203,6 +203,25 @@ exports['ncurry'] = function (test) {
     test.done();
 };
 
+exports['npcurry'] = function (test) {
+    var fn = _.npcurry(3, function (a, b, c, d) {
+        return a + b + c + (d || 0);
+    });
+    test.equal(fn(1,2,3), 6);
+    test.equal(fn(1,2,3), fn(1,2)(3));
+    test.equal(fn(1,2,3), fn(1)(2)(3));
+    test.equal(fn(1,2,3,4), 10);
+    test.equal(fn(1,2,3,4,5,6), fn(1,2)(3,4,5,6));
+    test.equal(fn(1,2,3,4,5,6), fn(1)(2)(3,4,5,6));
+    var fn2 = function () {
+        var args = Array.prototype.slice(arguments);
+        return args.reduce(function (a, b) { return a + b; }, 0);
+    };
+    test.equal(_.npcurry(3,fn2)(1,2,3,4,5,6), _.npcurry(3,fn2,1,2,3,4,5,6));
+    test.equal(_.npcurry(3,fn2)(1,2,3,4,5,6), _.npcurry(3,fn2,1,2)(3,4,5,6));
+    test.done();
+};
+
 exports['compose'] = function (test) {
     function append(x) {
         return function (str) {
@@ -3085,6 +3104,125 @@ exports['map to value'] = function (test) {
         test.same(xs, [1,1,1]);
     });
     test.done();
+};
+
+exports['context'] = function (test) {
+    test.expect(2);
+    function doubled(x) {
+        return x * 2;
+    }
+    var expected = [{value:2, context:1},
+            {value:4, context:2},
+            {value:6, context:3},
+            {value:8, context:4}];
+    _.context(doubled, [1, 2, 3, 4]).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    // partial application
+    _.context(doubled)([1, 2, 3, 4]).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    test.done();
+};
+
+exports['context - optional parameters are honored'] = function (test) {
+    test.expect(4);
+    function doubled(x) {
+        return x * 2;
+    }
+
+    // Set one optional parameter
+    var expectedV = [{v:2, context:1},
+            {v:4, context:2},
+            {v:6, context:3},
+            {v:8, context:4}];
+    _.context(doubled, 'v', [1, 2, 3, 4]).toArray(function (xs) {
+        test.same(xs, expectedV);
+    });
+    // partial application
+    _.context(doubled)('v', [1, 2, 3, 4]).toArray(function (xs) {
+        test.same(xs, expectedV);
+    });
+
+    // Set both optional parameters
+    var expectedVC = [{v:2, c:1},
+            {v:4, c:2},
+            {v:6, c:3},
+            {v:8, c:4}];
+    _.context(doubled, 'v', 'c', [1, 2, 3, 4]).toArray(function (xs) {
+        test.same(xs, expectedVC);
+    });
+    // partial application
+    _.context(doubled)('v', 'c', [1, 2, 3, 4]).toArray(function (xs) {
+        test.same(xs, expectedVC);
+    });
+    test.done();
+};
+
+exports['context - noValueOnError'] = noValueOnErrorTest(_.context(function (x) { return x }));
+
+exports['context - argument function throws'] = function (test) {
+    test.expect(7);
+    var expected = [{value:2, context:1},
+            {value:3, context:2},
+            {error: 'error 1', context:3},
+            {value:5, context:4},
+            {value:6, context:5}];
+    var err = new Error('error 1');
+    var s = _([1,2,3,4,5]).context(function (x) {
+        if (x === 3) throw err;
+        return x + 1;
+    });
+
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(function(e, v) {
+        ev = expected.shift();
+        errorEquals(test, ev.error)(e, v);
+        // Passing in the error just causes an Error
+        valueEquals(test, ev.context)(null, v);
+    });
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(valueEquals(test, _.nil));
+    test.done();
+};
+
+exports['context - ArrayStream'] = function (test) {
+    function doubled(x) {
+        return x * 2;
+    }
+    var expected = [{value:2, context:1},
+            {value:4, context:2},
+            {value:6, context:3},
+            {value:8, context:4}];    
+    _([1, 2, 3, 4]).context(doubled).toArray(function (xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
+exports['context - GeneratorStream'] = function (test) {
+    function doubled(x) {
+        return x * 2;
+    }
+    var expected = [{value:2, context:1},
+            {value:4, context:2},
+            {value:6, context:3},
+            {value:8, context:4}];
+    var s = _(function (push, next) {
+        push(null, 1);
+        push(null, 2);
+        setTimeout(function () {
+            push(null, 3);
+            push(null, 4);
+            push(null, _.nil);
+        }, 10);
+    });
+    s.context(doubled).toArray(function (xs) {
+        test.same(xs, expected);
+        test.done();
+    });
 };
 
 exports['doto'] = function (test) {
