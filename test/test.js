@@ -3188,6 +3188,27 @@ exports['context - argument function throws'] = function (test) {
     test.done();
 };
 
+exports['context - errorsWithContext has context'] = function (test) {
+    test.expect(2);
+    var err = new Error('error 1');
+    var s = _([1,2,3,4,5]).context(function (x) {
+        if (x === 3) throw err;
+        return x + 1;
+    });
+
+    var expected = [ { context: 1, value: 2 },
+      { context: 2, value: 3 },
+      { context: 4, value: 5 },
+      { context: 5, value: 6 } ];
+
+    s.errorsWithContext(function(err, context, push){
+        test.same(context, 3);
+    }).toArray(function(xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
 exports['context - ArrayStream'] = function (test) {
     function doubled(x) {
         return x * 2;
@@ -3298,6 +3319,34 @@ exports['transform - argument function throws'] = function (test) {
     s.pull(valueEquals(test, _.nil));
     test.done();
 };
+
+
+exports['transform - errorsWithContext has context'] = function (test) {
+    test.expect(2);
+    var err = new Error('error 1');
+    var original = [{x:1},
+            {x:2},
+            {x:3},
+            {x:4},
+            {x:5}];   
+    var expected = [{value:2, x:1},
+            {value:3, x:2},
+            {value:5, x:4},
+            {value:6, x:5}];
+    var s = _(original).transform('x', function (x) {
+        if (x === 3) throw err;
+        return x + 1;
+    }, 'value');
+
+
+    s.errorsWithContext(function(err, context, push){
+        test.same(context, {x:3});
+    }).toArray(function(xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
 
 exports['transform - ArrayStream'] = function (test) {
     function doubled(x) {

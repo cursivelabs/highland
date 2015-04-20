@@ -1414,6 +1414,48 @@ Stream.prototype.errors = function (f) {
 };
 exposeMethod('errors');
 
+
+/**
+ * Extracts errors from a Stream and applies them to an error handler
+ * function. Returns a new Stream with the errors removed (unless the error
+ * handler chooses to rethrow them using `push`). Errors can also be
+ * transformed and put back onto the Stream as values.
+ *
+ * @id errorsWithContext
+ * @section Transforms
+ * @name Stream.errorsWithContext(f)
+ * @param {Function} f - the function to pass all errors to
+ * @api public
+ *
+ * getDocument.errors(function (err, push) {
+ *     if (err.statusCode === 404) {
+ *         // not found, return empty doc
+ *         push(null, {});
+ *     }
+ *     else {
+ *         // otherwise, re-throw the error
+ *         push(err);
+ *     }
+ * });
+ */
+
+Stream.prototype.errorsWithContext = function (f) {
+    return this.consume(function (err, x, push, next) {
+        if (err) {
+            f(err, x, push);
+            next();
+        }
+        else if (x === nil) {
+            push(null, nil);
+        }
+        else {
+            push(null, x);
+            next();
+        }
+    });
+};
+exposeMethod('errorsWithContext');
+
 /**
  * Like the [errors](#errors) method, but emits a Stream end marker after
  * an Error is encountered.
@@ -1734,26 +1776,25 @@ exposeMethod('context', 2);
  */
 
 Stream.prototype.transform = function (inputParams, f, result) {
+  var isParamFunction = false;
   if (arguments.length === 3){
     inputParams = arguments[0];
     f = arguments[1];
     result = arguments[2];
   }
-  else if (arguments.length === 2 && _.isFunction(arguments[0])) {
-    // By default, inputParams is all, aka the whole input object
-    f = arguments[0];
-    result = arguments[1];
-  }
   else {
     throw new Error('Invalid parameter list:\n\tValid parameter lists\n\t\t' +
-      'values, function, result\n\t\t' +
-      'function, result\nRecieved ' + arguments.length + ' arguments');
+      'values, function, result' +
+      '\nRecieved ' + arguments.length + ' arguments');
   }
   if (_.isUndefined(inputParams) || inputParams === null) {
     inputParams = null;
   }
   else if (_.isString(inputParams)) {
     inputParams = [inputParams];
+  }
+  else if (_.isFunction(inputParams)) {
+    isParamFunction = true;
   }
 
   if (!_.isFunction(f)) {
@@ -1785,8 +1826,13 @@ Stream.prototype.transform = function (inputParams, f, result) {
         }
         else {
           var inputArgs = [];
-          for (var i in inputParams) {
-            inputArgs.push(x[inputParams[i]]);
+          if (isParamFunction) {
+            inputArgs = inputParams(x);
+          }
+          else {
+            for (var i in inputParams) {
+              inputArgs.push(x[inputParams[i]]);
+            }
           }
           rv[result] = f.apply(this, inputArgs);
         }
@@ -1795,7 +1841,8 @@ Stream.prototype.transform = function (inputParams, f, result) {
       catch (exception) {
         /* The ContextHint informs the stream to add the original value as
              the error's context */
-        push(addContextHint(exception), x);
+        var exceptionHinted = addContextHint(exception);
+        push(exceptionHinted, x);
       }
       finally {
         next();
