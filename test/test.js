@@ -3225,6 +3225,157 @@ exports['context - GeneratorStream'] = function (test) {
     });
 };
 
+exports['transform'] = function (test) {
+    test.expect(8);
+    function square(x) {
+        return x * x;
+    }
+    var input = [{x:0, xx:0},
+            {x:1, xx:1},
+            {x:2, xx:4},
+            {x:3, xx:9}];
+    var expected = [{x:0, xx:0, xxxx:0},
+            {x:1, xx:1, xxxx:1},
+            {x:2, xx:4, xxxx:16},
+            {x:3, xx:9, xxxx:81}];
+    _.transform('xx', square, 'xxxx', input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx', square, 'xxxx')(input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx', square)('xxxx', input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx')(square, 'xxxx', input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx', square)('xxxx')(input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx')(square, 'xxxx')(input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx')(square)('xxxx', input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    _.transform('xx')(square)('xxxx')(input).toArray(function (xs) {
+        test.same(xs, expected);
+    });
+    test.done();
+};
+
+exports['transform - noValueOnError'] = noValueOnErrorTest(_.transform('v', function (x) { return x }, 'r'));
+
+exports['transform - argument function throws'] = function (test) {
+    test.expect(7);
+    var original = [{x:1},
+            {x:2},
+            {x:3},
+            {x:4},
+            {x:5}];   
+    var expected = [{value:2, x:1},
+            {value:3, x:2},
+            {error: 'error 1', context:{x:3}},
+            {value:5, x:4},
+            {value:6, x:5}];
+    var err = new Error('error 1');
+    var s = _(original).transform('x', function (x) {
+        if (x === 3) throw err;
+        return x + 1;
+    }, 'value');
+
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(function(e, v) {
+        ev = expected.shift();
+        errorEquals(test, ev.error)(e, v);
+        // Passing in the error just causes an Error
+        valueEquals(test, ev.context)(null, v);
+    });
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(valueEquals(test, expected.shift()));
+    s.pull(valueEquals(test, _.nil));
+    test.done();
+};
+
+exports['transform - ArrayStream'] = function (test) {
+    function doubled(x) {
+        return x * 2;
+    }
+    var original = [{x:1},
+            {x:2},
+            {x:3},
+            {x:4}];   
+    var expected = [{value:2, x:1},
+            {value:4, x:2},
+            {value:6, x:3},
+            {value:8, x:4}];    
+    _(original).transform('x', doubled, 'value').toArray(function (xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
+exports['transform - GeneratorStream'] = function (test) {
+    function doubled(x) {
+        return x * 2;
+    }
+    var expected = [{value:2, x:1},
+            {value:4, x:2},
+            {value:6, x:3},
+            {value:8, x:4}]; 
+    var s = _(function (push, next) {
+        push(null, {x:1});
+        push(null, {x:2});
+        setTimeout(function () {
+            push(null, {x:3});
+            push(null, {x:4});
+            push(null, _.nil);
+        }, 10);
+    });
+    s.transform('x', doubled, 'value').toArray(function (xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
+exports['transform - pick multiple items'] = function (test) {
+    function compute(x, y) {
+        return x * y + x;
+    }
+    var original = [{x:1, y:2},
+            {x:2, y:1},
+            {x:3, y:4},
+            {x:4, y:3}]; 
+    var expected = [{x:1, y:2, z:3},
+            {x:2, y:1, z:4},
+            {x:3, y:4, z:15},
+            {x:4, y:3, z:16}]; 
+    _(original).transform(['x','y'], compute, 'z').toArray(function (xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
+exports['transform - will overwrite result'] = function (test) {
+    function compute(x, y) {
+        return x * y + x;
+    }
+    var original = [{x:1, y:2},
+            {x:2, y:1},
+            {x:3, y:4},
+            {x:4, y:3}]; 
+    var expected = [{x:1, y:3},
+            {x:2, y:4},
+            {x:3, y:15},
+            {x:4, y:16}]; 
+    _(original).transform(['x','y'], compute, 'y').toArray(function (xs) {
+        test.same(xs, expected);
+        test.done();
+    });
+};
+
 exports['doto'] = function (test) {
     test.expect(4);
 
